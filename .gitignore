@@ -1,0 +1,47 @@
+# Python virtual environment
+.venv/
+venv/
+ENV/
+
+# Large files
+*.zip
+*.so
+*.joblib
+*.pkl
+*.h5
+*.model
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Data files
+data/raw/
+data/processed/
+data/interim/
+
+# Model files
+models/
+*.joblib
+*.pkl
+*.h5
+*.model
+
+# Logs
+*.log
+logs/ 
