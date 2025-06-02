@@ -140,43 +140,99 @@ class FeatureGenerator:
         Returns:
             pd.DataFrame: Dataframe with added market features
         """
-        # Calculate S&P 500 returns
-        sp500_data['Returns_1d'] = sp500_data['Close'].pct_change()
-        sp500_data['Returns_5d'] = sp500_data['Close'].pct_change(5)
+        # Make a copy to avoid modifying the original data
+        sp500_copy = sp500_data.copy()
+        df_copy = df.copy()
         
-        # Merge with stock data
-        df = pd.merge(
-            df,
-            sp500_data[['Returns_1d', 'Returns_5d']],
-            left_index=True,
-            right_index=True,
+        # Calculate S&P 500 returns for multiple windows
+        sp500_copy['Returns_1d'] = sp500_copy['Close'].pct_change()
+        sp500_copy['Returns_5d'] = sp500_copy['Close'].pct_change(5)
+        
+        # Add additional S&P 500 return windows
+        for window in [10, 20, 60]:
+            sp500_copy[f'Returns_{window}d'] = sp500_copy['Close'].pct_change(window)
+        
+        # Ensure we have a date column for merging
+        if 'date' not in df_copy.columns and 'Date' not in df_copy.columns:
+            df_copy = df_copy.reset_index()
+            # Handle different possible index names
+            if df_copy.columns[0] == 'index':
+                df_copy = df_copy.rename(columns={'index': 'Date'})
+            elif df_copy.columns[0] in ['date', 'Date']:
+                df_copy = df_copy.rename(columns={df_copy.columns[0]: 'Date'})
+            else:
+                df_copy['Date'] = df_copy.index
+        elif 'date' in df_copy.columns:
+            df_copy = df_copy.rename(columns={'date': 'Date'})
+        
+        if 'Date' not in sp500_copy.columns:
+            sp500_copy = sp500_copy.reset_index()
+            if sp500_copy.columns[0] == 'index':
+                sp500_copy = sp500_copy.rename(columns={'index': 'Date'})
+            elif sp500_copy.columns[0] in ['date', 'Date']:
+                sp500_copy = sp500_copy.rename(columns={sp500_copy.columns[0]: 'Date'})
+            else:
+                sp500_copy['Date'] = sp500_copy.index
+    
+        # Ensure Date columns are datetime and normalized
+        df_copy['Date'] = pd.to_datetime(df_copy['Date'], utc=True).dt.tz_localize(None).dt.normalize()
+        sp500_copy['Date'] = pd.to_datetime(sp500_copy['Date'], utc=True).dt.tz_localize(None).dt.normalize()
+        
+        # Prepare SP500 columns for merging
+        sp500_columns = ['Date'] + [f'Returns_{w}d' for w in [1, 5, 10, 20, 60]]
+        sp500_columns = [col for col in sp500_columns if col in sp500_copy.columns]
+        
+        # Merge with stock data using Date column
+        df_merged = pd.merge(
+            df_copy,
+            sp500_copy[sp500_columns],
+            on='Date',
+            how='left',  # Use left join to preserve all stock data
             suffixes=('', '_SP500')
         )
         
-        # Calculate relative strength
-        df['Relative_strength_1d'] = df['Returns_1d'] - df['Returns_1d_SP500']
-        df['Relative_strength_5d'] = df['Returns_5d'] - df['Returns_5d_SP500']
+        # Set Date back as index
+        df_merged = df_merged.set_index('Date')
+        
+        # Calculate relative strength (handle NaN values from merge)
+        df_merged['Relative_strength_1d'] = df_merged['Returns_1d'] - df_merged['Returns_1d_SP500']
+        df_merged['Relative_strength_5d'] = df_merged['Returns_5d'] - df_merged['Returns_5d_SP500']
+        
+        # Add historical outperformance indicators
+        for window in [1, 5, 10, 20, 60]:
+            if f'Returns_{window}d' in df_merged.columns and f'Returns_{window}d_SP500' in df_merged.columns:
+                # Create binary feature: 1 if stock outperformed S&P500, 0 otherwise
+                df_merged[f'Outperformed_SP500_{window}d'] = (
+                    df_merged[f'Returns_{window}d'] > df_merged[f'Returns_{window}d_SP500']
+                ).astype(int)
+                
+                # Add relative outperformance margin 
+                df_merged[f'Outperformance_Margin_{window}d'] = (
+                    df_merged[f'Returns_{window}d'] - df_merged[f'Returns_{window}d_SP500']
+                )
         
         # Calculate rolling beta (20d window)
         window = 20
-        def calc_beta(x):
-            return x['Returns_1d'].rolling(window).cov(x['Returns_1d_SP500']) / x['Returns_1d_SP500'].rolling(window).var()
-        beta = df.groupby('Symbol', group_keys=False).apply(calc_beta)
-        if isinstance(beta, pd.DataFrame):
-            beta = beta.iloc[:, 0]
-        df['Beta_20d'] = beta
+        def calc_beta(group):
+            cov_val = group['Returns_1d'].rolling(window).cov(group['Returns_1d_SP500'])
+            var_val = group['Returns_1d_SP500'].rolling(window).var()
+            return cov_val / var_val
         
-        return df
+        df_merged['Beta_20d'] = df_merged.groupby('Symbol', group_keys=False).apply(calc_beta).values
+        
+        return df_merged
     
     def prepare_features(self,
                         stock_data: pd.DataFrame,
-                        sp500_data: pd.DataFrame) -> pd.DataFrame:
+                        sp500_data: pd.DataFrame,
+                        drop_future_data: bool = True) -> pd.DataFrame:
         """
         Prepare all features for model training.
         
         Args:
             stock_data (pd.DataFrame): Stock data
             sp500_data (pd.DataFrame): S&P 500 index data
+            drop_future_data (bool): Whether to drop future-looking features to prevent data leakage
             
         Returns:
             pd.DataFrame: Dataframe with all features
@@ -197,9 +253,88 @@ class FeatureGenerator:
             df[f'Returns_1d_lag{lag}'] = df.groupby('Symbol')['Returns_1d'].shift(lag)
             df[f'Volume_lag{lag}'] = df.groupby('Symbol')['Volume'].shift(lag)
         
-        # Add label: 1 if stock's 5d forward return > S&P 500's 5d forward return, else 0
-        df['Label'] = (df['Returns_5d'] > df['Returns_5d_SP500']).astype(int)
-        # Drop rows with NaN values
-        df = df.dropna()
+        # Add lagged outperformance features
+        for lag in [1, 2, 5]:
+            for window in [5, 10, 20]:
+                column = f'Outperformed_SP500_{window}d'
+                if column in df.columns:
+                    df[f'{column}_lag{lag}'] = df.groupby('Symbol')[column].shift(lag)
         
-        return df
+        # Add label: 1 if stock's 5d forward return > S&P 500's 5d forward return, else 0
+        # Calculate forward returns (shift negative to look forward)
+        df['Future_Returns_5d'] = df.groupby('Symbol')['Returns_5d'].shift(-5)
+        df['Future_Returns_5d_SP500'] = df['Returns_5d_SP500'].shift(-5)
+        df['Label'] = (df['Future_Returns_5d'] > df['Future_Returns_5d_SP500']).astype(int)
+        
+        # IMPORTANT: Remove future data to prevent data leakage
+        if drop_future_data:
+            future_columns = ['Future_Returns_5d', 'Future_Returns_5d_SP500']
+            print(f"Dropping future data columns to prevent leakage: {future_columns}")
+            df = df.drop(columns=future_columns)
+        
+        # Intelligent NaN handling - preserve data while ensuring quality
+        print(f"Dataset shape before NaN handling: {df.shape}")
+        print(f"NaN counts by column:\n{df.isnull().sum().sort_values(ascending=False).head(10)}")
+        
+        # Essential columns that cannot have NaN values
+        essential_columns = [
+            'Close', 'Volume', 'Returns_1d', 'Returns_1d_SP500'
+        ]
+        
+        # Drop rows where essential columns have NaN values
+        initial_rows = len(df)
+        df = df.dropna(subset=essential_columns)
+        print(f"Rows dropped due to missing essential data: {initial_rows - len(df)}")
+        
+        # For each stock, keep only rows after we have sufficient historical data
+        # This ensures technical indicators have enough data to be meaningful
+        min_data_points = max(self.windows) + 5  # e.g., 55 days if max window is 50
+        
+        def filter_sufficient_data(group):
+            """Keep only rows after we have sufficient historical data."""
+            if len(group) < min_data_points:
+                return pd.DataFrame()  # Return empty if insufficient data
+            # Keep rows starting from min_data_points
+            return group.iloc[min_data_points-1:]
+        
+        # Apply filtering by symbol
+        df_filtered = df.groupby('Symbol', group_keys=False).apply(filter_sufficient_data)
+        print(f"Rows after ensuring sufficient historical data: {len(df_filtered)}")
+        
+        # Reset index to ensure clean DataFrame structure, handling Symbol column properly
+        if len(df_filtered) > 0:
+            # Only reset index if we have data
+            if 'Symbol' in df_filtered.index.names:
+                df_filtered = df_filtered.reset_index()
+            elif df_filtered.index.name and df_filtered.index.name != 'Date':
+                df_filtered = df_filtered.reset_index(drop=True)
+        else:
+            # If no data, return empty DataFrame with proper columns
+            return pd.DataFrame()
+        
+        # Fill remaining NaN values with appropriate strategies
+        numeric_columns = df_filtered.select_dtypes(include=[np.number]).columns
+        
+        # Forward fill first, then backward fill for any remaining NaNs
+        if 'Symbol' in df_filtered.columns:
+            # Process each numeric column individually to avoid the ambiguity error
+            for col in numeric_columns:
+                if col in df_filtered.columns:
+                    df_filtered[col] = df_filtered.groupby('Symbol')[col].transform(
+                        lambda x: x.ffill().bfill()
+                    )
+        else:
+            # Fallback: fill without grouping if Symbol column is not available
+            df_filtered[numeric_columns] = df_filtered[numeric_columns].fillna(method='ffill').fillna(method='bfill')
+        
+        # For any still-remaining NaNs, fill with column median
+        for col in numeric_columns:
+            if df_filtered[col].isnull().any():
+                median_val = df_filtered[col].median()
+                df_filtered[col] = df_filtered[col].fillna(median_val)
+                print(f"Filled {col} remaining NaNs with median: {median_val}")
+        
+        print(f"Final dataset shape: {df_filtered.shape}")
+        print(f"Remaining NaN values: {df_filtered.isnull().sum().sum()}")
+        
+        return df_filtered
