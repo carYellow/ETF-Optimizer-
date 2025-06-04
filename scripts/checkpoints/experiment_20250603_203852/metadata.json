@@ -1,0 +1,36 @@
+{
+  "experiment_name": "experiment_20250603_203852",
+  "created_at": "2025-06-03T20:38:52.008351",
+  "checkpoints": [],
+  "config": {
+    "use_enhanced_features": true,
+    "split_method": "event_aware",
+    "models": [
+      "lightgbm"
+    ],
+    "optimization": "random",
+    "n_trials": 50,
+    "test_size": 0.2,
+    "gap_days": 5,
+    "feature_selection": null,
+    "n_features": null,
+    "use_cache": true,
+    "n_workers": null,
+    "use_parallel": true,
+    "memory_profile": false,
+    "cache_dir": "cache/features",
+    "feature_importance_selection": true,
+    "max_features": null,
+    "enable_benchmarking": true,
+    "enable_checkpointing": true,
+    "enable_gpu": true,
+    "checkpoint_dir": "checkpoints",
+    "experiment_name": null,
+    "advanced_feature_selection": null,
+    "infinity_handling": "median",
+    "early_stopping_rounds": 10,
+    "optimize_memory": true
+  },
+  "metrics": {},
+  "last_updated": "2025-06-03T20:38:52.011864"
+}

@@ -1,0 +1,33 @@
+{
+    "timestamp": "20250603_235825",
+    "model_type": "all",
+    "split_method": "temporal",
+    "feature_count": 20,
+    "features": [
+        "Returns_5d_SP500",
+        "PVT",
+        "Price_Momentum_50d",
+        "GK_Vol",
+        "NATR",
+        "BB_width",
+        "Price_Momentum_10d",
+        "Volume_MA_5",
+        "Volatility_20d",
+        "Price_MA_50d",
+        "HV_20",
+        "BB_upper",
+        "Volume",
+        "Outperformed_SP500_20d_lag5",
+        "BB_Upper_10d",
+        "Price_MA_5d",
+        "Price_MA_20d",
+        "IsMonthEnd",
+        "BB_Upper_5d",
+        "Outperformed_SP500_5d_lag5"
+    ],
+    "split_index": 0,
+    "total_features": 20,
+    "train_samples": 1427197,
+    "test_samples": 377416,
+    "positive_class_ratio": 0.5130609159071943
+}
