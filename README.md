@@ -57,6 +57,17 @@ This project predicts whether a given S&P 500 stock will outperform the S&P 500 
 
 The `docs/` directory contains guides and references to help you use, understand, and extend the StocksPredicter project.
 
+### Contents
+
+- **training_guide.md** — Step-by-step instructions for model training, hyperparameter tuning, and evaluation.
+- **MLOps_Plan.md** — Outline of the MLOps strategy, including Dockerization, experiment tracking, and pipeline orchestration.
+- **feature_engineering_overview.md** — Overview of feature engineering strategies and rationale.
+- **model_selection_report.md** — Analysis and comparison of different model choices.
+- **train_test_split_report.md** — Details on train/test split strategies and their impact.
+
+Refer to these documents for in-depth explanations, usage examples, and best practices.
+
+
 **Model Results:** For detailed model results and analysis, see the `reports/` directory. Key contents include:
 
 - **model_training_report.html** — Full training report with model comparison (XGBoost vs LightGBM), performance metrics (AUC, F1, accuracy, precision, recall), feature engineering summary, and recommendations. LightGBM achieved slightly higher AUC/accuracy, while XGBoost had higher recall.
@@ -74,14 +85,3 @@ The reports provide:
 - Visualizations of feature importance and model results
 
 See `model_training_report.html` for a comprehensive summary and recommendations.
-
-### Contents
-
-- **training_guide.md** — Step-by-step instructions for model training, hyperparameter tuning, and evaluation.
-- **MLOps_Plan.md** — Outline of the MLOps strategy, including Dockerization, experiment tracking, and pipeline orchestration.
-- **feature_engineering_overview.md** — Overview of feature engineering strategies and rationale.
-- **model_selection_report.md** — Analysis and comparison of different model choices.
-- **train_test_split_report.md** — Details on train/test split strategies and their impact.
-
-Refer to these documents for in-depth explanations, usage examples, and best practices.
-
